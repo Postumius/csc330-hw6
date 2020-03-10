@@ -1,8 +1,10 @@
 require_relative './hw6provided'
 
 class MyPieceChallenge < Piece
-  All_Pieces = [[[[0, 0]]]]
+  All_Pieces = [[[[-1, 0], [0, 0], [1, 0]],
+                 [[0, -1], [0, 0], [0, 1]]]]
 
+  
    #returns number of squares in block
   def size
     @all_rotations[0].size
@@ -14,25 +16,56 @@ class MyPieceChallenge < Piece
   end
 
   def move_to_best
-    dest = pick_spot(potential_spots)
-    move(dest[0]-@base_position[0], dest[1]-@base_position[1], 0)
+    dest = pick_position(potential_positions)
+    puts dest
+    move(dest[0] - @base_position[0],
+         dest[1] - @base_position[1],
+         dest[2] - @rotation_index)
   end
 
   private
-  def pick_spot (spots)
-    max = [0, 0]
-    spots.each do |point|
-      if point[1] > max[1]
-      then max = point     
+  def pick_position (positions)
+    max = [0, 0, 0]
+    positions.each do |pos|
+      if pos[1] > max[1]
+      then max = pos
       end
     end
     max
   end
 
-  def potential_spots
-    (0..@board.num_columns-1).map do |x|
-      [x, lowest_fit(@all_rotations[0], x)]
+  def potential_positions
+    (0...@all_rotations.size).map do |rot_index|
+      shape = @all_rotations[rot_index]
+      extent = horiz_extent(shape)
+      (0-extent[0]...@board.num_columns-extent[1]).map do |x|
+        [x, lowest_fit(shape, x), rot_index]
+      end
+    end.reduce(:+)
+  end  
+
+  def horiz_extent(shape)
+    left = 0
+    right = 0
+    shape.each do |point|
+      if point[0] < left
+      then left = point[0]
+      elsif right < point[0]
+      then right = point[0]
+      end
     end
+    #puts [left, right]
+    [left, right]
+  end
+
+   def lowest_fit(shape, x)
+    (@board.num_rows-1).downto(0).each do |y|
+      if fits?(shape, x, y)
+      then return y
+      end
+    end
+    puts("no fit in column")
+    puts(x)
   end
 
   def fits? (shape, x, y)
@@ -40,21 +73,13 @@ class MyPieceChallenge < Piece
       location = [point[0]+x, point[1]+y]
       if !@board.empty_at(location)
       then
-        puts(point)
         return false
       end
     end
     return true
   end
 
-  def lowest_fit(shape, x)
-    (@board.num_rows-1).downto(0).each do |y|
-      if fits?(shape, x, y)
-      then return y
-      end
-    end
-    raise("no fit in column")
-  end
+ 
   
 end
 
