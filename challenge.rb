@@ -1,8 +1,8 @@
 require_relative './hw6provided'
 
 class MyPieceChallenge < Piece
-  All_Pieces = [[[[-1, 0], [0, 0], [1, 0]],
-                 [[0, -1], [0, 0], [0, 1]]]]
+  #All_Pieces = [[[[-1, 0], [0, 0], [1, 0]],
+   #              [[0, -1], [0, 0], [0, 1]]]]
 
   
    #returns number of squares in block
@@ -17,7 +17,7 @@ class MyPieceChallenge < Piece
 
   def move_to_best
     dest = pick_position(potential_positions)
-    puts dest
+    #puts dest
     move(dest[0] - @base_position[0],
          dest[1] - @base_position[1],
          dest[2] - @rotation_index)
@@ -25,15 +25,58 @@ class MyPieceChallenge < Piece
 
   private
   def pick_position (positions)
-    max = [0, 0, 0]
+    best = [0, 0, 0]
+    max = -26
     positions.each do |pos|
-      if pos[1] > max[1]
-      then max = pos
+      score = h_reach_low(pos) +
+              h_dont_cover_holes(pos)
+      if score > max
+      then
+        max = score
+        best = pos
       end
     end
-    max
+    puts(max)
+    best
   end
 
+  #heuristics that we'll maximise
+  def h_reach_low(pos)
+    shape = @all_rotations[pos[2]]
+    -@board.num_rows + 1 +
+      pos[1] +
+      lowest_extent(shape)
+  end
+
+  def h_dont_cover_holes(pos)
+    shape = @all_rotations[pos[2]]
+    score = 0
+    shape.each do |square|
+      if !shape.include?([square[0], square[1]+1])
+        point = [square[0] + pos[0],
+                 square[1] + pos[1]]
+        loop do
+          point[1] = point[1] + 1
+          if @board.empty_at(point)
+          then score -= 5
+          else break
+          end
+        end
+      end
+    end
+    score
+  end
+    
+  def lowest_extent(shape)
+    lowest = 0
+    shape.each do |point|
+      if point[1] > lowest
+      then lowest = point[1]
+      end
+    end
+    lowest
+  end
+    
   def potential_positions
     (0...@all_rotations.size).map do |rot_index|
       shape = @all_rotations[rot_index]
