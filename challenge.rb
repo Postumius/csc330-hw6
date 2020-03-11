@@ -28,7 +28,8 @@ class MyPieceChallenge < Piece
     best = [0, 0, 0]
     max = -26
     positions.each do |pos|
-      score = h_reach_low(pos) +
+      score = h_reach_low(pos)/10 +              
+              h_hug(pos) +
               h_dont_cover_holes(pos)
       if score > max
       then
@@ -36,37 +37,69 @@ class MyPieceChallenge < Piece
         best = pos
       end
     end
-    puts(max)
+    #puts "----"
+    #puts(h_reach_low(best))
+    #puts(h_hug(best))
+    
     best
   end
 
   #heuristics that we'll maximise
   def h_reach_low(pos)
-    shape = @all_rotations[pos[2]]
+    shape = shape_in_pos(pos)
     -@board.num_rows + 1 +
-      pos[1] +
       lowest_extent(shape)
   end
 
-  def h_dont_cover_holes(pos)
-    shape = @all_rotations[pos[2]]
+  def h_hug(pos)
+    shape = shape_in_pos(pos)
     score = 0
-    shape.each do |square|
-      if !shape.include?([square[0], square[1]+1])
-        point = [square[0] + pos[0],
-                 square[1] + pos[1]]
-        loop do
-          point[1] = point[1] + 1
-          if @board.empty_at(point)
-          then score -= 5
-          else break
-          end
+    around = [[0,1],[0,-1],[1,0],[-1,0]]
+    shape.each do |point|
+      around.each do |dir|
+        if !@board.empty_at(point.zip(dir).map{|n,m| n+m})
+        then score += 1
         end
       end
     end
     score
   end
-    
+
+  
+
+  
+  def h_dont_cover_holes(pos)
+    shape = shape_in_pos(pos)
+    empty = ->(pt){@board.empty_at(pt) && !shape.include?(pt)}
+    score = 0
+    shape.each do |point|
+      
+      if empty.(below(point)) 
+      then score -= 1
+      end
+    end
+    score
+  end
+
+
+  def shape_in_pos(pos)
+    @all_rotations[pos[2]].map do |x, y|
+      [x + pos[0], y + pos[1]]
+    end
+  end
+
+  def left_of(point)
+    [point[0]-1, point[1]]
+  end
+
+  def right_of(point)
+    [point[0]+1, point[1]]
+  end
+
+  def below(point)
+    [point[0], point[1]+1]
+  end
+  
   def lowest_extent(shape)
     lowest = 0
     shape.each do |point|
