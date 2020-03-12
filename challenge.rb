@@ -1,9 +1,29 @@
 require_relative './hw6provided'
 
+class Point
+  attr_accessor :x, :y
+  def initialize(x, y)
+    @x = x
+    @y = y
+  end
+
+  def self.from_array(arr)
+    Point.new(arr[0], arr[1])
+  end
+
+  def +(other)
+    Point.new(self.x + other.x, self.y + other.y)
+  end
+end
+
 class MyPieceChallenge < Piece
   #All_Pieces = [[[[-1, 0], [0, 0], [1, 0]],
    #              [[0, -1], [0, 0], [0, 1]]]]
 
+  Up = [0, -1]
+  Down = [0, 1]
+  Left = [-1, 0]
+  Right = [1, 0]
   
    #returns number of squares in block
   def size
@@ -55,10 +75,10 @@ class MyPieceChallenge < Piece
     shape = shape_in_pos(pos)
     is_empty = ->(pt){@board.empty_at(pt) && !shape.include?(pt)}
     score = 0
-    around = [[0,1],[0,-1],[1,0],[-1,0]]
+    cardinals = [Up, Down, Left, Right]
     shape.each do |point|
-      around.each do |dir|
-        adj_point = point.zip(dir).map{|n,m| n+m}
+      cardinals.each do |dir|
+        adj_point = plus(point, dir)
         if !@board.empty_at(adj_point)
         then score += 2
         elsif is_empty.(adj_point)
@@ -71,17 +91,21 @@ class MyPieceChallenge < Piece
     score
   end
 
+  def plus(arr1, arr2)
+    arr1.zip(arr2).map{|x1, x2| x1+x2}
+  end
+
   def leads_up?(point, empty_test)
     inner = ->(pt, dir) {
       if !empty_test.(pt)
       then false
-      elsif empty_test.(above(pt))
+      elsif empty_test.(plus(pt, Up))
       then true
       else
-        inner.([pt[0]+dir, pt[1]], dir)
+        inner.(plus(pt, dir), dir)
       end
     }
-    inner.(point, -1) || inner.(point, 1)
+    inner.(point, Left) || inner.(point, Right)
   end
         
       
@@ -100,26 +124,10 @@ class MyPieceChallenge < Piece
 
 
   def shape_in_pos(pos)
-    @all_rotations[pos[2]].map do |x, y|
-      [x + pos[0], y + pos[1]]
+    @all_rotations[pos[2]].map do |point|
+      plus(point, pos)
     end
-  end
-
-  def left_of(point)
-    [point[0]-1, point[1]]
-  end
-
-  def right_of(point)
-    [point[0]+1, point[1]]
-  end
-
-  def below(point)
-    [point[0], point[1]+1]
-  end
-
-  def above(point)
-    [point[0], point[1]-1]
-  end
+  end 
   
   def lowest_extent(shape)
     lowest = 0
@@ -157,7 +165,7 @@ class MyPieceChallenge < Piece
 
    def lowest_fit(shape, x)
     (@board.num_rows-1).downto(0).each do |y|
-      if fits?(shape, x, y)
+      if fits?(shape.map{|point| plus(point, [x,y])})
       then return y
       end
     end
@@ -165,10 +173,9 @@ class MyPieceChallenge < Piece
     puts(x)
   end
 
-  def fits? (shape, x, y)
+  def fits? (shape)
     shape.each do |point|
-      location = [point[0]+x, point[1]+y]
-      if !@board.empty_at(location)
+      if !@board.empty_at(point)
       then
         return false
       end
