@@ -27,10 +27,10 @@ class MyPieceChallenge < Piece
   def pick_position (positions)
     best = [0, 0, 0]
     max = -26
-    positions.each do |pos|
+    positions.shuffle.each do |pos|
       score = h_reach_low(pos)/10 +              
-              h_hug(pos) +
-              h_dont_cover_holes(pos)
+              h_hug(pos)
+              #h_dont_cover_holes(pos)
       if score > max
       then
         max = score
@@ -53,21 +53,38 @@ class MyPieceChallenge < Piece
 
   def h_hug(pos)
     shape = shape_in_pos(pos)
+    is_empty = ->(pt){@board.empty_at(pt) && !shape.include?(pt)}
     score = 0
     around = [[0,1],[0,-1],[1,0],[-1,0]]
     shape.each do |point|
       around.each do |dir|
-        if !@board.empty_at(point.zip(dir).map{|n,m| n+m})
-        then score += 1
+        adj_point = point.zip(dir).map{|n,m| n+m}
+        if !@board.empty_at(adj_point)
+        then score += 2
+        elsif is_empty.(adj_point)
+          if !leads_up?(adj_point, is_empty)
+          then score -= 1
+          end
         end
       end
     end
     score
   end
 
-  
-
-  
+  def leads_up?(point, empty_test)
+    inner = ->(pt, dir) {
+      if !empty_test.(pt)
+      then false
+      elsif empty_test.(above(pt))
+      then true
+      else
+        inner.([pt[0]+dir, pt[1]], dir)
+      end
+    }
+    inner.(point, -1) || inner.(point, 1)
+  end
+        
+      
   def h_dont_cover_holes(pos)
     shape = shape_in_pos(pos)
     empty = ->(pt){@board.empty_at(pt) && !shape.include?(pt)}
@@ -98,6 +115,10 @@ class MyPieceChallenge < Piece
 
   def below(point)
     [point[0], point[1]+1]
+  end
+
+  def above(point)
+    [point[0], point[1]-1]
   end
   
   def lowest_extent(shape)
@@ -163,12 +184,14 @@ class MyBoardChallenge < Board
   def initialize (game)
     super(game)
     @current_block = MyPieceChallenge.next_piece(self)
+    @auto_used = false
   end
 
   def auto
-    if !game_over? and @game.is_running?
+    if !game_over? and @game.is_running? and !@auto_used
       @current_block.move_to_best
     end
+    @auto_used = true
     draw
   end
 
@@ -176,6 +199,7 @@ class MyBoardChallenge < Board
   def next_piece
     @current_block = MyPieceChallenge.next_piece(self)
     @current_pos = nil
+    @auto_used = false
   end
 
  
