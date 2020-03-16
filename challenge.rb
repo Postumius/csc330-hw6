@@ -1,29 +1,7 @@
 require_relative './hw6provided'
 
-class Point
-  attr_accessor :x, :y
-  def initialize(x, y)
-    @x = x
-    @y = y
-  end
-
-  def self.from_array(arr)
-    Point.new(arr[0], arr[1])
-  end
-
-  def +(other)
-    Point.new(self.x + other.x, self.y + other.y)
-  end
-end
 
 class MyPieceChallenge < Piece
-  #All_Pieces = [[[[-1, 0], [0, 0], [1, 0]],
-   #              [[0, -1], [0, 0], [0, 1]]]]
-
-  Up = [0, -1]
-  Down = [0, 1]
-  Left = [-1, 0]
-  Right = [1, 0]
   
    #returns number of squares in block
   def size
@@ -37,98 +15,136 @@ class MyPieceChallenge < Piece
 
   def move_to_best
     dest = pick_position(potential_positions)
-    #puts dest
     move(dest[0] - @base_position[0],
          dest[1] - @base_position[1],
          dest[2] - @rotation_index)
   end
+  
 
   private
+  
+  #maximizes the heuristics to find the best position
   def pick_position (positions)
-    best = [0, 0, 0]
-    max = -26
-    positions.shuffle.each do |pos|
-      score = h_reach_low(pos)/10 +              
-              h_hug(pos)
-              #h_dont_cover_holes(pos)
-      if score > max
-      then
-        max = score
-        best = pos
+    positions.shuffle #shuffle first to avoid always picking leftmost maximum
+      .reduce do |p1, p2|
+      if combine_heur(p1) > combine_heur(p2)
+      then p1
+      else p2
       end
     end
-    #puts "----"
-    #puts(h_reach_low(best))
-    #puts(h_hug(best))
-    
-    best
   end
 
-  #heuristics that we'll maximise
+  #weight heuristics individually
+  def combine_heur(pos)
+    (h_reach_low(pos)/5) + 
+      h_hug(pos) +
+      h_dont_cover_holes(pos) +
+      h_clear_rows(pos)*2
+  end
+  
+
+  ###### Heuristics Start Here #####
+
+  #tries to get the lowest point on the block as low as possible
   def h_reach_low(pos)
     shape = shape_in_pos(pos)
     -@board.num_rows + 1 +
       lowest_extent(shape)
-  end
+  end 
 
-  def h_hug(pos)
-    shape = shape_in_pos(pos)
-    is_empty = ->(pt){@board.empty_at(pt) && !shape.include?(pt)}
-    score = 0
-    cardinals = [Up, Down, Left, Right]
-    shape.each do |point|
-      cardinals.each do |dir|
-        adj_point = plus(point, dir)
-        if !@board.empty_at(adj_point)
-        then score += 2
-        elsif is_empty.(adj_point)
-          if !leads_up?(adj_point, is_empty)
-          then score -= 1
-          end
-        end
+  #tries to place blocks to there isn't empy space below them
+  def h_dont_cover_holes(pos)
+    shape = shape_in_pos(pos)    
+    is_empty = make_empty_test(shape_in_pos(pos))
+    shape.reduce(0) do |score, point|      
+      if is_empty.(plus(point, Down)) 
+      then score-1
+      else score
       end
     end
-    score
   end
 
+  #tries to complete rows
+  def h_clear_rows(pos)
+    shape = shape_in_pos(pos)
+    is_empty = make_empty_test(shape)
+    shape.reduce(0) do |score, point|
+      if (0..9).zip(Array.new(10,point[1])).
+           all?{|pt| !is_empty.(pt)}
+      then score + 1
+      else score
+      end
+    end
+  end
+  
+  #tries to maximise the perimeter that is touching other blocks
+  #tries to avoid creating "air bubbles" i.e. empty space that
+  #doesn't lead up
+  def h_hug(pos)
+    shape = shape_in_pos(pos)
+    is_empty = make_empty_test(shape)
+    #score = 0
+    cardinals = [Up, Down, Left, Right]
+    shape.reduce(0) do |scr, point|
+      cardinals.reduce(0) do |score, dir|
+        adj_point = plus(point, dir)
+        if !@board.empty_at(adj_point)
+        then score + 2
+        elsif is_empty.(adj_point) &&
+              !leads_up?(adj_point, is_empty, 2)
+        then score - 1
+        else score
+        end
+      end + scr
+    end
+  end
+
+  ##### Heuristics End Here #####
+
+  #tests if a space will be empty once the shape has been placed
+  def make_empty_test(shape)
+    ->(pt){@board.empty_at(pt) && !shape.include?(pt)}
+  end
+
+  
+  #directions to be added to a point to move it
+  Up = [0, -1]
+  Down = [0, 1]
+  Left = [-1, 0]
+  Right = [1, 0]
+
+  #elementwise addition
   def plus(arr1, arr2)
     arr1.zip(arr2).map{|x1, x2| x1+x2}
   end
 
-  def leads_up?(point, empty_test)
-    inner = ->(pt, dir) {
+  #follows an air bubble upwards
+  #returns true if the bubble extends upwards by the given height
+  def leads_up?(point, empty_test, height)
+    inner = ->(pt, dir) { #inner searches either left or right
       if !empty_test.(pt)
       then false
-      elsif empty_test.(plus(pt, Up))
+      elsif point[1] == 0 #if it hits the top of the board
       then true
+      elsif height == 0   #if it has risen enough
+      then true
+      elsif empty_test.(plus(pt, Up)) 
+      then leads_up?(plus(pt, Up), empty_test, height-1) #move up a level
       else
-        inner.(plus(pt, dir), dir)
+        inner.(plus(pt, dir), dir) #move sideways and keep looking
       end
     }
     inner.(point, Left) || inner.(point, Right)
-  end
-        
-      
-  def h_dont_cover_holes(pos)
-    shape = shape_in_pos(pos)
-    empty = ->(pt){@board.empty_at(pt) && !shape.include?(pt)}
-    score = 0
-    shape.each do |point|
-      
-      if empty.(below(point)) 
-      then score -= 1
-      end
-    end
-    score
-  end
+  end 
 
-
+  #translates the shape into the right position
   def shape_in_pos(pos)
     @all_rotations[pos[2]].map do |point|
       plus(point, pos)
     end
   end 
-  
+
+  #locates the lowest square on the shape
   def lowest_extent(shape)
     lowest = 0
     shape.each do |point|
@@ -138,17 +154,11 @@ class MyPieceChallenge < Piece
     end
     lowest
   end
-    
-  def potential_positions
-    (0...@all_rotations.size).map do |rot_index|
-      shape = @all_rotations[rot_index]
-      extent = horiz_extent(shape)
-      (0-extent[0]...@board.num_columns-extent[1]).map do |x|
-        [x, lowest_fit(shape, x), rot_index]
-      end
-    end.reduce(:+)
-  end  
+  
 
+  ##### functions for finding all possible positions start here #####
+
+  #locates left and rightmost squares
   def horiz_extent(shape)
     left = 0
     right = 0
@@ -159,32 +169,46 @@ class MyPieceChallenge < Piece
       then right = point[0]
       end
     end
-    #puts [left, right]
     [left, right]
   end
 
-   def lowest_fit(shape, x)
+  #for every rotation and every column in which it fits,
+  #finds the lowest resting position for the shape
+  def potential_positions
+    (0...@all_rotations.size).map do |rot_index|
+      shape = @all_rotations[rot_index]
+      extent = horiz_extent(shape)
+      (0-extent[0]...@board.num_columns-extent[1]).map do |x|
+        [x, lowest_fit(shape, x), rot_index]
+      end
+    end.reduce(:+)
+  end    
+  
+  #given a column, finds the lowest y position into which
+  #the shape can fit
+  def lowest_fit(shape, x)
     (@board.num_rows-1).downto(0).each do |y|
-      if fits?(shape.map{|point| plus(point, [x,y])})
+      if leads_up?([x,y], fits?(shape), 5) #prevent the program from teleporting shapes to impossible positions
       then return y
       end
     end
-    puts("no fit in column")
-    puts(x)
+    0
   end
 
+  #tests if the shape fits in position delta
   def fits? (shape)
-    shape.each do |point|
-      if !@board.empty_at(point)
-      then
-        return false
+    ->(delta) {
+      shape.each do |point|
+        if !@board.empty_at(plus(point, delta))
+        then
+          return false
+        end
       end
-    end
-    return true
+      return true
+    }
   end
 
- 
-  
+   ##### functions for finding all possible positions end here #####  
 end
 
 class MyBoardChallenge < Board  
