@@ -2,7 +2,7 @@
 
 require_relative './hw6provided'
 require_relative './hw6assignment'
-require_relative './challenge.rb'
+#require_relative './challenge.rb'
 
 def runTetris
   Tetris.new 
